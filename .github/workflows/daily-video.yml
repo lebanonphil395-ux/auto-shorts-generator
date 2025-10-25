@@ -1,4 +1,5 @@
-yamlname: Génération quotidienne de vidéo
+yaml
+name: Génération quotidienne de vidéo
 
 on:
   schedule:
