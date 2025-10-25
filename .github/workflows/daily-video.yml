@@ -1,4 +1,4 @@
-name: Génération quotidienne de vidéo
+name: Generation quotidienne de video
 
 on:
   schedule:
