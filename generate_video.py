@@ -1,53 +1,48 @@
 """
 Générateur automatique de vidéos YouTube Shorts et TikTok
-Crée et publie une vidéo quotidiennement sur des faits surprenants
+Version simplifiée avec Edge TTS (gratuit, sans configuration complexe)
 """
 
 import os
 import json
 import requests
 from datetime import datetime
-from pathlib import Path
 import random
+import asyncio
 
 # ============================================
-# CONFIGURATION - Modifiez ces valeurs
+# CONFIGURATION
 # ============================================
 
-# Ces valeurs seront stockées dans les "Secrets" GitHub
-OPENAI_API_KEY = os.environ.get('OPENAI_API_KEY')  # ou ANTHROPIC_API_KEY
-GOOGLE_CLOUD_KEY = os.environ.get('GOOGLE_CLOUD_KEY')
-YOUTUBE_CLIENT_ID = os.environ.get('YOUTUBE_CLIENT_ID')
-YOUTUBE_CLIENT_SECRET = os.environ.get('YOUTUBE_CLIENT_SECRET')
-TIKTOK_ACCESS_TOKEN = os.environ.get('TIKTOK_ACCESS_TOKEN')
+OPENAI_API_KEY = os.environ.get('OPENAI_API_KEY', '')
+PEXELS_API_KEY = os.environ.get('PEXELS_API_KEY', '')
 
-# Thèmes de faits (vous pouvez en ajouter)
+# Thèmes de faits
 THEMES = [
-    "science incroyable",
-    "histoire méconnue",
-    "animaux étonnants",
-    "espace et astronomie",
-    "corps humain",
-    "inventions surprenantes",
-    "géographie fascinante",
-    "records du monde"
+    "science",
+    "histoire",
+    "animaux",
+    "espace",
+    "nature",
+    "technologie"
 ]
+
+print("=" * 50)
+print("🚀 DÉMARRAGE DU GÉNÉRATEUR AUTOMATIQUE")
+print("=" * 50)
 
 # ============================================
 # ÉTAPE 1 : Récupérer un fait vérifié
 # ============================================
 
 def get_verified_fact():
-    """
-    Récupère un fait vérifié depuis Wikipedia
-    """
-    print("🔍 Recherche d'un fait intéressant...")
+    """Récupère un fait vérifié depuis Wikipedia"""
+    print("\n🔍 Recherche d'un fait intéressant...")
     
-    # API Wikipedia pour récupérer un article aléatoire
     url = "https://fr.wikipedia.org/api/rest_v1/page/random/summary"
     
     try:
-        response = requests.get(url)
+        response = requests.get(url, timeout=10)
         data = response.json()
         
         fact = {
@@ -60,8 +55,7 @@ def get_verified_fact():
         return fact
         
     except Exception as e:
-        print(f"❌ Erreur lors de la récupération : {e}")
-        # Fait de secours
+        print(f"⚠️ Utilisation d'un fait de secours : {e}")
         return {
             'title': 'Le miel ne périme jamais',
             'extract': 'Le miel est le seul aliment qui ne se périme jamais. Des pots de miel vieux de 3000 ans retrouvés dans des tombes égyptiennes étaient encore parfaitement comestibles.',
@@ -73,91 +67,76 @@ def get_verified_fact():
 # ============================================
 
 def generate_script(fact):
-    """
-    Utilise l'IA pour créer un script captivant de 30-45 secondes
-    """
-    print("📝 Génération du script vidéo...")
+    """Utilise l'IA pour créer un script captivant"""
+    print("\n📝 Génération du script vidéo...")
     
-    prompt = f"""Crée un script de vidéo courte (30-45 secondes) sur ce fait :
+    if not OPENAI_API_KEY:
+        print("⚠️ Pas de clé OpenAI - utilisation d'un script par défaut")
+        return f"Saviez-vous que {fact['extract'][:200]}... Incroyable non ? Abonne-toi pour découvrir d'autres faits surprenants !"
+    
+    prompt = f"""Crée un script de vidéo TikTok/YouTube Shorts (30-40 secondes) sur ce fait :
 
 Titre : {fact['title']}
 Contenu : {fact['extract']}
 
-Le script doit :
-- Commencer par un HOOK captivant (question ou affirmation choc)
-- Être au format parlé, naturel
-- Durer entre 30 et 45 secondes à la lecture
-- Se terminer par un appel à l'action ("Abonne-toi pour plus de faits incroyables !")
-- Être en français
+Instructions :
+- Commence par un HOOK captivant (question choc)
+- Style oral, naturel, énergique
+- 30-40 secondes maximum
+- Termine par "Abonne-toi pour plus !"
+- UNIQUEMENT le texte à dire, rien d'autre"""
 
-Donne UNIQUEMENT le texte à dire, sans indication de mise en scène."""
-
-    # Utilisation de l'API OpenAI (GPT-4 ou GPT-3.5-turbo)
     headers = {
         'Authorization': f'Bearer {OPENAI_API_KEY}',
         'Content-Type': 'application/json'
     }
     
     data = {
-        'model': 'gpt-3.5-turbo',  # ou 'gpt-4' si vous avez accès
+        'model': 'gpt-3.5-turbo',
         'messages': [
-            {'role': 'system', 'content': 'Tu es un créateur de contenus viral pour TikTok et YouTube Shorts.'},
+            {'role': 'system', 'content': 'Tu crées des scripts viraux pour TikTok.'},
             {'role': 'user', 'content': prompt}
         ],
-        'temperature': 0.8
+        'temperature': 0.9,
+        'max_tokens': 300
     }
     
     try:
         response = requests.post(
             'https://api.openai.com/v1/chat/completions',
             headers=headers,
-            json=data
+            json=data,
+            timeout=30
         )
-        script = response.json()['choices'][0]['message']['content']
-        print("✅ Script généré avec succès")
-        return script
+        
+        if response.status_code == 200:
+            script = response.json()['choices'][0]['message']['content'].strip()
+            print("✅ Script généré avec succès")
+            return script
+        else:
+            print(f"⚠️ Erreur API OpenAI ({response.status_code}), script par défaut")
+            return f"Saviez-vous que {fact['extract'][:150]}... Abonne-toi pour découvrir d'autres faits surprenants !"
         
     except Exception as e:
-        print(f"❌ Erreur génération script : {e}")
-        return f"Saviez-vous que {fact['extract']} Incroyable non ? Abonne-toi pour découvrir d'autres faits surprenants !"
+        print(f"⚠️ Erreur génération script : {e}")
+        return f"Découvrez ce fait incroyable : {fact['extract'][:150]}... Pour plus de contenu, abonne-toi !"
 
 # ============================================
-# ÉTAPE 3 : Générer la voix-off
+# ÉTAPE 3 : Générer la voix-off (Edge TTS)
 # ============================================
 
-def generate_voiceover(script, output_path="voiceover.mp3"):
-    """
-    Génère la voix-off avec Google Cloud Text-to-Speech
-    """
-    print("🎤 Génération de la voix-off...")
-    
-    from google.cloud import texttospeech
-    
-    client = texttospeech.TextToSpeechClient()
-    
-    synthesis_input = texttospeech.SynthesisInput(text=script)
-    
-    voice = texttospeech.VoiceSelectionParams(
-        language_code="fr-FR",
-        name="fr-FR-Neural2-A",  # Voix féminine naturelle
-        ssml_gender=texttospeech.SsmlVoiceGender.FEMALE
-    )
-    
-    audio_config = texttospeech.AudioConfig(
-        audio_encoding=texttospeech.AudioEncoding.MP3,
-        speaking_rate=1.1,  # Légèrement plus rapide pour TikTok
-        pitch=0.0
-    )
+async def generate_voiceover_async(script, output_path="voiceover.mp3"):
+    """Génère la voix-off avec Edge TTS (Microsoft, gratuit)"""
+    print("\n🎤 Génération de la voix-off...")
     
     try:
-        response = client.synthesize_speech(
-            input=synthesis_input,
-            voice=voice,
-            audio_config=audio_config
-        )
+        import edge_tts
         
-        with open(output_path, "wb") as out:
-            out.write(response.audio_content)
+        # Voix française naturelle
+        voice = "fr-FR-DeniseNeural"  # Voix féminine
+        
+        communicate = edge_tts.Communicate(script, voice)
+        await communicate.save(output_path)
         
         print(f"✅ Voix-off créée : {output_path}")
         return output_path
@@ -166,42 +145,56 @@ def generate_voiceover(script, output_path="voiceover.mp3"):
         print(f"❌ Erreur génération voix : {e}")
         return None
 
+def generate_voiceover(script, output_path="voiceover.mp3"):
+    """Wrapper synchrone pour Edge TTS"""
+    return asyncio.run(generate_voiceover_async(script, output_path))
+
 # ============================================
 # ÉTAPE 4 : Télécharger des visuels
 # ============================================
 
-def download_stock_videos(theme, count=3):
-    """
-    Télécharge des vidéos stock gratuites depuis Pexels
-    """
-    print(f"🎬 Téléchargement de vidéos sur le thème : {theme}")
+def download_stock_videos(theme, count=2):
+    """Télécharge des vidéos depuis Pexels"""
+    print(f"\n🎬 Téléchargement de vidéos : {theme}")
     
-    PEXELS_API_KEY = "VOTRE_CLE_PEXELS"  # Gratuit sur pexels.com/api
+    if not PEXELS_API_KEY:
+        print("⚠️ Pas de clé Pexels - vidéo sans visuels")
+        return []
     
     headers = {'Authorization': PEXELS_API_KEY}
     url = f"https://api.pexels.com/videos/search?query={theme}&per_page={count}&orientation=portrait"
     
     try:
-        response = requests.get(url, headers=headers)
+        response = requests.get(url, headers=headers, timeout=15)
         videos = response.json().get('videos', [])
         
         video_files = []
         for i, video in enumerate(videos[:count]):
-            video_url = video['video_files'][0]['link']
-            filename = f"video_{i}.mp4"
+            # Trouver la vidéo en qualité SD (plus rapide)
+            video_file = None
+            for vf in video.get('video_files', []):
+                if vf.get('quality') == 'sd':
+                    video_file = vf
+                    break
             
-            # Télécharger la vidéo
-            vid_response = requests.get(video_url)
-            with open(filename, 'wb') as f:
-                f.write(vid_response.content)
+            if not video_file and video.get('video_files'):
+                video_file = video['video_files'][0]
             
-            video_files.append(filename)
-            print(f"  ✅ Téléchargé : {filename}")
+            if video_file:
+                video_url = video_file['link']
+                filename = f"video_{i}.mp4"
+                
+                vid_response = requests.get(video_url, timeout=30)
+                with open(filename, 'wb') as f:
+                    f.write(vid_response.content)
+                
+                video_files.append(filename)
+                print(f"  ✅ Téléchargé : {filename}")
         
         return video_files
         
     except Exception as e:
-        print(f"❌ Erreur téléchargement vidéos : {e}")
+        print(f"⚠️ Erreur téléchargement : {e}")
         return []
 
 # ============================================
@@ -209,61 +202,81 @@ def download_stock_videos(theme, count=3):
 # ============================================
 
 def create_video(video_files, voiceover_path, script, output="final_video.mp4"):
-    """
-    Assemble la vidéo avec MoviePy : vidéos + voix + sous-titres
-    """
-    print("🎥 Création de la vidéo finale...")
-    
-    from moviepy.editor import VideoFileClip, AudioFileClip, TextClip, CompositeVideoClip, concatenate_videoclips
+    """Assemble la vidéo avec MoviePy"""
+    print("\n🎥 Création de la vidéo finale...")
     
     try:
+        from moviepy.editor import (VideoFileClip, AudioFileClip, TextClip, 
+                                    CompositeVideoClip, concatenate_videoclips, 
+                                    ColorClip)
+        
         # Charger l'audio
         audio = AudioFileClip(voiceover_path)
         duration = audio.duration
         
-        # Charger et redimensionner les vidéos en 9:16 (format vertical)
-        clips = []
-        for video_file in video_files:
-            clip = VideoFileClip(video_file)
-            clip = clip.resize(height=1920)  # Format portrait
-            clip = clip.crop(x_center=clip.w/2, width=1080, height=1920)
-            clips.append(clip)
-        
-        # Concaténer les clips pour matcher la durée audio
-        video = concatenate_videoclips(clips, method="compose")
-        video = video.subclip(0, min(duration, video.duration))
+        # Si pas de vidéos, créer un fond coloré
+        if not video_files:
+            print("⚠️ Création d'un fond de couleur")
+            video = ColorClip(size=(1080, 1920), color=(20, 20, 40), duration=duration)
+        else:
+            # Charger et traiter les vidéos
+            clips = []
+            for video_file in video_files:
+                clip = VideoFileClip(video_file)
+                # Redimensionner en format portrait 9:16
+                clip = clip.resize(height=1920)
+                if clip.w > 1080:
+                    clip = clip.crop(x_center=clip.w/2, width=1080, height=1920)
+                clips.append(clip)
+            
+            # Concaténer
+            video = concatenate_videoclips(clips, method="compose")
+            
+            # Ajuster à la durée audio
+            if video.duration < duration:
+                # Boucler si trop court
+                video = video.loop(duration=duration)
+            else:
+                video = video.subclip(0, duration)
         
         # Ajouter l'audio
         video = video.set_audio(audio)
         
-        # Générer les sous-titres (simplifié)
+        # Créer sous-titres simplifiés (3 mots par écran)
         words = script.split()
-        word_duration = duration / len(words)
-        
         subtitle_clips = []
-        for i, word in enumerate(words):
+        words_per_screen = 3
+        word_duration = duration / (len(words) / words_per_screen)
+        
+        for i in range(0, len(words), words_per_screen):
+            text = ' '.join(words[i:i+words_per_screen])
+            
             txt_clip = TextClip(
-                word,
-                fontsize=70,
+                text,
+                fontsize=60,
                 color='white',
                 font='Arial-Bold',
                 stroke_color='black',
-                stroke_width=3
+                stroke_width=2,
+                size=(1000, None),
+                method='caption'
             )
-            txt_clip = txt_clip.set_position('center').set_duration(word_duration)
-            txt_clip = txt_clip.set_start(i * word_duration)
+            txt_clip = txt_clip.set_position('center')
+            txt_clip = txt_clip.set_duration(word_duration)
+            txt_clip = txt_clip.set_start((i/words_per_screen) * word_duration)
             subtitle_clips.append(txt_clip)
         
-        # Composer vidéo finale
+        # Composer
         final = CompositeVideoClip([video] + subtitle_clips)
         
         # Exporter
         final.write_videofile(
             output,
-            fps=30,
+            fps=24,
             codec='libx264',
             audio_codec='aac',
-            threads=4
+            preset='ultrafast',
+            threads=2
         )
         
         print(f"✅ Vidéo créée : {output}")
@@ -271,130 +284,70 @@ def create_video(video_files, voiceover_path, script, output="final_video.mp4"):
         
     except Exception as e:
         print(f"❌ Erreur création vidéo : {e}")
+        import traceback
+        traceback.print_exc()
         return None
-
-# ============================================
-# ÉTAPE 6 : Publier sur YouTube Shorts
-# ============================================
-
-def upload_to_youtube(video_path, title, description):
-    """
-    Upload sur YouTube via l'API
-    """
-    print("📤 Publication sur YouTube Shorts...")
-    
-    # Configuration OAuth2 et upload
-    # (Code simplifié - voir documentation YouTube API v3)
-    
-    try:
-        from googleapiclient.discovery import build
-        from googleapiclient.http import MediaFileUpload
-        
-        youtube = build('youtube', 'v3', credentials=YOUTUBE_CREDENTIALS)
-        
-        body = {
-            'snippet': {
-                'title': title,
-                'description': description + "\n\n#Shorts #FaitsSurprenants",
-                'tags': ['shorts', 'faits', 'éducation'],
-                'categoryId': '27'  # Education
-            },
-            'status': {
-                'privacyStatus': 'public',
-                'selfDeclaredMadeForKids': False
-            }
-        }
-        
-        media = MediaFileUpload(video_path, resumable=True)
-        
-        request = youtube.videos().insert(
-            part='snippet,status',
-            body=body,
-            media_body=media
-        )
-        
-        response = request.execute()
-        print(f"✅ Publié sur YouTube : {response['id']}")
-        
-    except Exception as e:
-        print(f"❌ Erreur upload YouTube : {e}")
-
-# ============================================
-# ÉTAPE 7 : Publier sur TikTok
-# ============================================
-
-def upload_to_tiktok(video_path, title):
-    """
-    Upload sur TikTok via l'API
-    """
-    print("📤 Publication sur TikTok...")
-    
-    # API TikTok nécessite OAuth complexe
-    # Alternative : utiliser des bibliothèques comme TikTokApi
-    
-    try:
-        # Code simplifié - voir documentation TikTok Developer
-        print("⚠️ TikTok API nécessite une configuration avancée")
-        print("Alternative : utilisez l'auto-upload de Buffer ou Metricool")
-        
-    except Exception as e:
-        print(f"❌ Erreur upload TikTok : {e}")
 
 # ============================================
 # FONCTION PRINCIPALE
 # ============================================
 
 def main():
-    """
-    Fonction principale qui orchestre tout le processus
-    """
-    print("\n" + "="*50)
-    print("🚀 DÉMARRAGE DU GÉNÉRATEUR AUTOMATIQUE")
-    print("="*50 + "\n")
+    """Fonction principale"""
     
-    # 1. Récupérer un fait
-    fact = get_verified_fact()
-    
-    # 2. Générer le script
-    script = generate_script(fact)
-    print(f"\n📄 Script :\n{script}\n")
-    
-    # 3. Générer la voix-off
-    voiceover = generate_voiceover(script)
-    
-    if not voiceover:
-        print("❌ Impossible de continuer sans voix-off")
-        return
-    
-    # 4. Télécharger des visuels
-    theme = random.choice(THEMES)
-    videos = download_stock_videos(theme, count=2)
-    
-    if not videos:
-        print("⚠️ Pas de vidéos téléchargées, utilisation d'images statiques")
-        # TODO: Alternative avec images
-    
-    # 5. Créer la vidéo
-    final_video = create_video(videos, voiceover, script)
-    
-    if not final_video:
-        print("❌ Échec création vidéo")
-        return
-    
-    # 6. Publier
-    title = f"Fait incroyable : {fact['title']}"
-    description = f"{script}\n\nSource : {fact['source']}"
-    
-    upload_to_youtube(final_video, title, description)
-    upload_to_tiktok(final_video, title)
-    
-    print("\n" + "="*50)
-    print("✅ PROCESSUS TERMINÉ AVEC SUCCÈS !")
-    print("="*50 + "\n")
-
-# ============================================
-# EXÉCUTION
-# ============================================
+    try:
+        # 1. Récupérer un fait
+        fact = get_verified_fact()
+        
+        # 2. Générer le script
+        script = generate_script(fact)
+        print(f"\n📄 Script :\n{script}\n")
+        
+        # 3. Générer la voix-off
+        voiceover = generate_voiceover(script)
+        
+        if not voiceover:
+            print("❌ Impossible de continuer sans voix-off")
+            return
+        
+        # 4. Télécharger des visuels
+        theme = random.choice(THEMES)
+        videos = download_stock_videos(theme, count=2)
+        
+        # 5. Créer la vidéo
+        final_video = create_video(videos, voiceover, script)
+        
+        if not final_video:
+            print("❌ Échec création vidéo")
+            return
+        
+        # 6. Sauvegarder les infos
+        title = f"Fait incroyable : {fact['title'][:50]}"
+        description = f"{script}\n\nSource : {fact['source']}\n\n#Shorts #FaitsSurprenants #Education"
+        
+        info = {
+            'title': title,
+            'description': description,
+            'video_path': final_video,
+            'date': datetime.now().isoformat()
+        }
+        
+        with open('video_info.json', 'w', encoding='utf-8') as f:
+            json.dump(info, f, ensure_ascii=False, indent=2)
+        
+        print("\n" + "="*50)
+        print("✅ VIDÉO CRÉÉE AVEC SUCCÈS !")
+        print(f"📁 Fichier : {final_video}")
+        print(f"📝 Titre : {title}")
+        print("="*50)
+        
+        # Note : Upload YouTube/TikTok à ajouter plus tard
+        print("\n💡 Pour publier automatiquement, configurez les APIs YouTube/TikTok")
+        
+    except Exception as e:
+        print(f"\n❌ ERREUR GÉNÉRALE : {e}")
+        import traceback
+        traceback.print_exc()
 
 if __name__ == "__main__":
     main()
