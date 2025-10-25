@@ -1,0 +1,36 @@
+yamlname: Génération quotidienne de vidéo
+
+on:
+  schedule:
+    - cron: '0 8 * * *'  # Tous les jours à 8h UTC (10h Paris)
+  workflow_dispatch:  # Permet de lancer manuellement
+
+jobs:
+  generate-and-publish:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Récupération du code
+      uses: actions/checkout@v3
+    
+    - name: Installation Python 3.10
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.10'
+    
+    - name: Installation des dépendances
+      run: |
+        pip install --upgrade pip
+        pip install -r requirements.txt
+    
+    - name: Installation de FFmpeg
+      run: sudo apt-get update && sudo apt-get install -y ffmpeg
+    
+    - name: Génération et publication
+      env:
+        OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+        GOOGLE_CLOUD_KEY: ${{ secrets.GOOGLE_CLOUD_KEY }}
+        PEXELS_API_KEY: ${{ secrets.PEXELS_API_KEY }}
+        YOUTUBE_CLIENT_ID: ${{ secrets.YOUTUBE_CLIENT_ID }}
+        YOUTUBE_CLIENT_SECRET: ${{ secrets.YOUTUBE_CLIENT_SECRET }}
+      run: python generate_video.py
